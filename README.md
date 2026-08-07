@@ -1,5 +1,5 @@
 # GenSG_InterimProject_Group2
-SCTP in Jr Data Engineering course interim project under Generation SG @ Temasek Polytechnic 
+for **SCTP in Junior Data Engineering Bootcamp** interim project under **Generation SG @ Temasek Polytechnic**
 Done by group of 4 learners regarding the (topic)
 ### Team Members:
 1) Ana N________________________ 2) Jie Song L___________3) Jun Jie Y _________________ 4)   Yong Jian T ___________
@@ -21,7 +21,7 @@ Challenges faced:
 4.
 
 ### Our approach: 
-1.
+1. Utilize github branching
 2.
 3.
 4.
