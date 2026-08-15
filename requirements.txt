@@ -1,1 +1,2 @@
 # List of external Python libraries
+psycopg2-binary
