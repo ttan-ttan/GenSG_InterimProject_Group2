@@ -1,142 +1,121 @@
-"""The main module to execute the emergency routing application workflow."""
+"""Main execution script for patient emergency hospital routing recommendation."""
 
-import requests
-from .routing_logic import (
-    get_base_travel_times_by_postal,
-    calculate_total_time_to_treatment,
-    evaluate_routing_decision
-)
-from .predict_wait_times import forecast_hospital_wait_time
+from src.routing_logic import evaluate_hospitals_for_patient
+from pathlib import Path
+import os
+import sys
+
+from dotenv import load_dotenv
+import psycopg2
+
+# Go up one level to reach root, then point to src folder
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
-def check_weather_condition() -> bool:
-    """
-    Fetches real-time weather from data.gov.sg to check for heavy rain.
-    Returns True if heavy rain/showers are detected, else False.
-    """
-    url = "https://api-open.data.gov.sg/v2/real-time/api/two-hr-forecast"
-    try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            for item in data.get("items", []):
-                for forecast in item.get("forecasts", []):
-                    text = forecast.get("forecast", "").lower()
-                    if "rain" in text or "shower" in text or "thundery" in text:
-                        return True
-        print(
-            "[Weather API]: Clear skies or API unavailable. "
-            "Defaulting to normal traffic."
-        )
-        return False
-    except requests.exceptions.RequestException as e:
-        print(
-            f"[Weather API Notice]: Could not fetch live weather ({e}). "
-            "Proceeding with standard traffic."
-        )
-        return False
+load_dotenv()
 
 
 def main():
-    """Run the main emergency routing application workflow."""
-    print("==================================================")
-    print("   SMART-ROUTE ED: Emergency Load Balancer System  ")
-    print("==================================================")
+    """Executes the main CLI workflow for hospital routing based on user location and live conditions."""
+    print("=========== Singapore A&E Hospital Routing System (< 30 Mins Filter) ============")
 
-    # 1. Get User Input
-    user_postal = input(
-        "Enter your 6-digit Singapore Postal Code (e.g., 520123): "
-    ).strip()
+    # User Input
+    user_postal = input("Enter your 6-digit postal code: ").strip()
 
-    hospital_travel_map = get_base_travel_times_by_postal(user_postal)
-
-    if not hospital_travel_map:
-        print("❌ Error: Invalid postal code format. Please enter exactly 6 digits.")
+    if len(user_postal) != 6 or not user_postal.isdigit():
+        print("XXX Error: Invalid postal code format. Please enter a 6-digit numeric postal code.")
         return
 
-    print(
-        f"✔ Location Detected: Sector prefix {user_postal[:2]} loaded successfully.")
-
-    # 2. Check Live Weather
-    print("⏳ Checking live weather conditions via data.gov.sg...")
-    is_heavy_rain = check_weather_condition()
-    print(f"✔ Heavy Rain Status: {is_heavy_rain}")
-
-    # 3. Predict/Fetch Hospital Wait Times
-    nuh_base_wait = forecast_hospital_wait_time(
-        "National University Hospital (NUH)", 3.2
-    )
-    ntf_base_wait = forecast_hospital_wait_time(
-        "Ng Teng Fong General Hospital (NTFGH)", 1.2
-    )
-    ttsh_base_wait = forecast_hospital_wait_time(
-        "Tan Tock Seng Hospital (TTSH)", 4.5
-    )
-    cgh_base_wait = forecast_hospital_wait_time(
-        "Changi General Hospital (CGH)", 1.5
-    )
-
-    hospitals_db = [
+    # Sample mock hospital list (In production, base travel times come from a distance matrix API
+    # and waiting times come from your live database tables)
+    hospitals_dataset = [
         {
-            "hospital_name": "National University Hospital (NUH)",
-            "wait_time_hrs": nuh_base_wait
+            "name": "Singapore General Hospital (SGH)",
+            "base_travel_time_mins": 18.0,
+            "waiting_time_mins": 45
         },
         {
-            "hospital_name": "Ng Teng Fong General Hospital (NTFGH)",
-            "wait_time_hrs": ntf_base_wait
+            "name": "Tan Tock Seng Hospital (TTSH)",
+            "base_travel_time_mins": 12.0,
+            "waiting_time_mins": 60
         },
         {
-            "hospital_name": "Tan Tock Seng Hospital (TTSH)",
-            "wait_time_hrs": ttsh_base_wait
+            "name": "Khoo Teck Puat Hospital (KTPH)",
+            "base_travel_time_mins": 25.0,
+            "waiting_time_mins": 30
         },
         {
-            "hospital_name": "Changi General Hospital (CGH)",
-            "wait_time_hrs": cgh_base_wait
-        }
+            "name": "National University Hospital (NUH)",
+            "base_travel_time_mins": 28.0,
+            "waiting_time_mins": 50
+        },
+        {
+            "name": "Changi General Hospital (CGH)",
+            "base_travel_time_mins": 32.0,
+            "waiting_time_mins": 25
+        },  # Filtered out (>30 min)
     ]
 
-    # 4. Calculate Total Time to Treatment using routing_logic.py
-    print("\n--------------------------------------------------")
-    print("Computing Total Time to Treatment (Travel + Wait)...")
-    print("--------------------------------------------------")
-
-    sorted_hospitals = calculate_total_time_to_treatment(
-        hospital_travel_map, hospitals_db, is_heavy_rain
-    )
-    nearest, second_nearest, time_difference, should_divert = (
-        evaluate_routing_decision(sorted_hospitals)
-    )
-
-    print("1st Choice:", nearest['hospital'])
-    print(
-        f"    -> Travel Time: {nearest['final_travel_mins']} mins | "
-        f"Wait Time: {nearest['wait_time_hrs']} hrs | "
-        f"Total: {nearest['total_time_mins']} mins"
-    )
-
-    print("2nd Choice:", second_nearest['hospital'])
-    print(
-        f"    -> Travel Time: {second_nearest['final_travel_mins']} mins | "
-        f"Wait Time: {second_nearest['wait_time_hrs']} hrs | "
-        f"Total: {second_nearest['total_time_mins']} mins"
-    )
-
-    # 5. Final Recommendation Output
-    print("\n================ FINAL RECOMMENDATION ================")
-    if should_divert:
-        print(f"🚨 DIVERT RECOMMENDATION: Go to {second_nearest['hospital']}!")
-        print(
-            f"💡 Reason: Even though it is further away, you save {time_difference} "
-            "minutes overall because the nearest hospital is heavily congested."
+    try:
+        connection = psycopg2.connect(
+            dbname=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
         )
-    else:
-        print(f"✅ STANDARD RECOMMENDATION: Go to {nearest['hospital']}.")
-        print(
-            "💡 Reason: The time saved by traveling further does not "
-            "offset the extra transit time."
+
+        print(f"\nAnalyzing routes for Postal Prefix '{user_postal[:2]}'...")
+
+        # Evaluate hospitals using routing logic
+        evaluation_result = evaluate_hospitals_for_patient(
+            user_postal, hospitals_dataset, connection
         )
-    print("=======================================================")
+
+        connection.close()
+
+        print(f"-> Mapped Region: {evaluation_result['patient_region']}")
+        print(
+            f"-> Weather Status (Rain Forecasted): {evaluation_result['will_rain']}\n")
+
+        # Display Top Proposal
+        best_choice = evaluation_result["best_choice"]
+        recommendations = evaluation_result["recommendations"]
+
+        if not best_choice:
+            print(
+                "XXXXXXXXXXXXXXXXXXXXX No hospitals found within the 30-minute travel threshold under current conditions.XXXXXXXXXXXXXXX")
+        else:
+            print("                          Best Hospital to Go:")
+            print(
+                f"-----------------------{best_choice['hospital_name']}------------------------------")
+            print(
+                f"              Total Time to Treatment: {best_choice['total_time']} mins "
+                f"(Travel: {best_choice['travel_time']}m + Wait: {best_choice['waiting_time']}m)"
+            )
+            if best_choice['weather_impact']:
+                print(
+                    f"   - Active Delays: {', '.join(best_choice['weather_impact'])}")
+            print("-" * 83)
+
+            print("\n All Valid Alternative Options (Sorted by Fastest Total Time):")
+            for idx, rec in enumerate(recommendations, 1):
+                print(f"{idx}. {rec['hospital_name']}")
+                print(
+                    f"   - Travel Time: {rec['travel_time']} mins | "
+                    f"A&E Wait: {rec['waiting_time']} mins | Total: {rec['total_time']} mins"
+                )
+                if rec['weather_impact']:
+                    print(f"   - Factors: {', '.join(rec['weather_impact'])}")
+                print()
+            print(
+                "=================== MAI TU LIAO KAH GIN GO HOSPITAL!!===============================")
+    except psycopg2.Error as db_err:
+        print(f"XXX Database connection failed: {db_err}")
 
 
 if __name__ == "__main__":
     main()
+
+
+# to run this scrypt, type in terminal: python -m src.main
