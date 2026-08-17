@@ -37,9 +37,11 @@ CREATE TABLE weather_forecast (
 
 CREATE TABLE weather_history (
     id SERIAL PRIMARY KEY,
-    record_date DATE NOT NULL UNIQUE,
+    area_name VARCHAR(100) NOT NULL,
+    record_date DATE NOT NULL,
     total_rainfall_mm NUMERIC(5, 2) NOT NULL,
-    is_catalyst_day BOOLEAN DEFAULT FALSE
+    is_catalyst_day BOOLEAN DEFAULT FALSE,
+    CONSTRAINT unique_area_date UNIQUE (area_name, record_date)
 );
 
 CREATE TABLE dengue_clusters (

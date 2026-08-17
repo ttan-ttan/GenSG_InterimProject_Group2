@@ -19,16 +19,17 @@ def load_historical_weather_to_db(transformed_records, conn, table_name: str = "
     records_to_insert = []
     for record in transformed_records:
         records_to_insert.append((
+            record.get("area_name"),
             record.get("record_date"),
             record.get("total_rainfall_mm"),
             record.get("is_catalyst_day", False),
         ))
 
-    # Using ON CONFLICT to update if the specific date already exists in history
+    # Using ON CONFLICT with composite key (area_name, record_date) to update if record already exists
     insert_query = f"""
-        INSERT INTO {table_name} (record_date, total_rainfall_mm, is_catalyst_day)
+        INSERT INTO {table_name} (area_name, record_date, total_rainfall_mm, is_catalyst_day)
         VALUES %s
-        ON CONFLICT (record_date) 
+        ON CONFLICT (area_name, record_date) 
         DO UPDATE SET 
             total_rainfall_mm = EXCLUDED.total_rainfall_mm,
             is_catalyst_day = EXCLUDED.is_catalyst_day;
