@@ -1,1 +1,3 @@
 # List of external Python libraries
+requests
+python-dotenv
