@@ -2,6 +2,7 @@
 to run type: python src/visualization.py
 """
 
+import psycopg2
 import os
 from pathlib import Path
 import pandas as pd
@@ -154,4 +155,32 @@ def generate_comprehensive_dashboard():
 
 if __name__ == "__main__":
     print("Running Comprehensive Visualization Pipeline...")
-    generate_comprehensive_dashboard()
+    generate_comprehensive_dashboard()from dotenv import load_dotenv
+
+load_dotenv()
+
+# Connect to database and load data for analysis
+connection = psycopg2.connect(
+    dbname=os.getenv("DB_NAME"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWORD"),
+    host=os.getenv("DB_HOST", "localhost"),
+    port=os.getenv("DB_PORT", "5432")
+)
+
+query = "SELECT postal_district, SUM(case_count) as total_cases FROM dengue_clusters GROUP BY postal_district;"
+df = pd.read_sql(query, connection)
+connection.close()
+
+# Plotting the chart
+plt.figure(figsize=(10, 6))
+sns.barplot(data=df, x="postal_district", y="total_cases", palette="viridis")
+plt.title("Total Dengue Cases by Postal District")
+plt.xlabel("Postal District")
+plt.ylabel("Total Cases")
+plt.xticks(rotation=45)
+plt.tight_layout()
+
+# Save or show chart
+plt.savefig("data/processed/dengue_cases_chart.png")
+print("Chart saved successfully!")

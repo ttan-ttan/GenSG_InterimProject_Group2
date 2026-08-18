@@ -14,9 +14,9 @@ POLL_DOWNLOAD_URL = f"https://api-open.data.gov.sg/v1/public/api/datasets/{DENGU
 
 
 def save_raw_dengue_data(raw_records):
-    """Saves the raw dengue cluster GeoJSON data to a JSON file for debugging and record-keeping."""
+    """Saves the raw dengue cluster GeoJSON data to a static filename for downstream pipeline steps."""
     output_path = Path(__file__).parent.parent.parent / "data" / \
-        "raw" / "raw_dengue_clusters.json"
+        "raw" / "dengue_clusters.geojson"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -36,7 +36,7 @@ def fetch_real_time_dengue():
         if api_key:
             headers["x-api-key"] = api_key
 
-        # Step 1: Poll the dataset endpoint to get the active download URL (supporting 200/201 responses)
+        # Step 1: Poll the dataset endpoint to get the active download URL
         poll_response = requests.get(
             POLL_DOWNLOAD_URL, headers=headers, timeout=60)
         if poll_response.status_code not in [200, 201]:
