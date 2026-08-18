@@ -1,1 +1,12 @@
 # List of external Python libraries
+psycopg2-binary
+
+#help python to read env files variable, because by defaul it only can read OS memory variables
+python-dotenv
+
+requests
+pandas
+sqlalchemy
+sqlalchemy-utils
+selenium
+webdriver-manager
