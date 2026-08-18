@@ -9,9 +9,14 @@ cluster in two passes:
    their own, so the cluster polygon is sampled and the buildings inside it are
    looked up instead, keeping those on the roads the locality names.
 
+Cluster data is downloaded live from data.gov.sg by default, so the output
+reflects the clusters active today. A previously downloaded GeoJSON file can be
+passed instead to re-run against a fixed snapshot.
+
 Usage:
-    python src/geocode.py "path/to/DengueClustersGEOJSON.geojson"
-    python src/geocode.py "path/to/clusters.geojson" -o data/processed/postal_codes.csv
+    python src/geocode.py
+    python src/geocode.py --save-raw
+    python src/geocode.py --geojson data/raw/dengue_clusters_2026-08-18.geojson
 """
 
 import argparse
@@ -29,6 +34,13 @@ load_dotenv()
 
 SEARCH_URL = "https://www.onemap.gov.sg/api/common/elastic/search"
 REVGEOCODE_URL = "https://www.onemap.gov.sg/api/public/revgeocode"
+
+# NEA's dengue cluster dataset on data.gov.sg. Downloading is a two-step call:
+# poll-download hands back a short-lived S3 link to the current GeoJSON.
+DATASET_ID = "d_dbfabf16158d1b0e1c420627c0819168"
+POLL_DOWNLOAD_URL = (
+    f"https://api-open.data.gov.sg/v1/public/api/datasets/{DATASET_ID}/poll-download"
+)
 
 # NEA writes localities like "Senja Cl (Blk 647A, 647B)" or
 # "Lilac Dr, Walk / Mimosa Cres, Rd (Mimosa Pk)". A trailing bracket holds
@@ -360,6 +372,7 @@ FIELDNAMES = [
     "QUERY",
     "QUERY_TYPE",
     "POSTAL",
+    "POSTAL_PREFIX",
     "VERIFIED",
     "ADDRESS",
     "BLK_NO",
@@ -371,14 +384,73 @@ FIELDNAMES = [
 ]
 
 
-def load_features(geojson_path: str) -> List[dict]:
-    with open(geojson_path, encoding="utf-8") as f:
-        return json.load(f).get("features", [])
+def postal_prefix(postal: str) -> str:
+    """Return the two-digit postal sector of a postal code, e.g. "602240" -> "60".
+
+    The first two digits of a Singapore postal code identify its postal sector,
+    which is useful for grouping clusters by area. Rows with no postal code get
+    an empty prefix rather than a truncated one.
+    """
+    return postal[:2] if postal else ""
+
+
+def fetch_clusters(save_to: Optional[str] = None) -> dict:
+    """Download the current dengue cluster GeoJSON from data.gov.sg.
+
+    The API does not serve the file directly: poll-download returns a temporary
+    download link, which is then fetched separately. Passing save_to writes the
+    file exactly as downloaded, so the run can be reproduced later.
+    """
+    poll = requests.get(POLL_DOWNLOAD_URL, timeout=60)
+    poll.raise_for_status()
+    payload = poll.json()
+    if payload.get("code") != 0:
+        raise RuntimeError(
+            f"data.gov.sg refused the download: {payload.get('errMsg', payload)}"
+        )
+
+    download = requests.get(payload["data"]["url"], timeout=120)
+    download.raise_for_status()
+
+    if save_to:
+        os.makedirs(os.path.dirname(save_to) or ".", exist_ok=True)
+        with open(save_to, "w", encoding="utf-8", newline="") as f:
+            f.write(download.text)
+        print(f"Saved snapshot to {save_to}")
+
+    return download.json()
+
+
+def default_snapshot_path() -> str:
+    """Return a dated path under data/raw for today's snapshot."""
+    today = time.strftime("%Y-%m-%d")
+    return os.path.join("data", "raw", f"dengue_clusters_{today}.geojson")
+
+
+def load_features(geojson_path: Optional[str], save_raw: Optional[str] = None) -> List[dict]:
+    """Return cluster features from a local GeoJSON file, or live from NEA."""
+    if geojson_path:
+        with open(geojson_path, encoding="utf-8") as f:
+            geojson = json.load(f)
+    else:
+        geojson = fetch_clusters(save_raw)
+    return geojson.get("features", [])
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("geojson", help="Path to the NEA dengue cluster GeoJSON file.")
+    parser.add_argument(
+        "--geojson",
+        help="Path to a downloaded GeoJSON file. Omit to fetch live from data.gov.sg.",
+    )
+    parser.add_argument(
+        "--save-raw",
+        nargs="?",
+        const=default_snapshot_path(),
+        metavar="PATH",
+        help="Save the live download to PATH (default: a dated file in data/raw), "
+             "so the same cluster data can be re-run later with --geojson.",
+    )
     parser.add_argument(
         "-o",
         "--output",
@@ -398,8 +470,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    features = load_features(args.geojson)
-    print(f"Loaded {len(features)} dengue clusters from {args.geojson}\n")
+    if args.geojson and args.save_raw:
+        parser.error("--save-raw applies to the live download, so it cannot be used with --geojson.")
+
+    source = args.geojson or "data.gov.sg (live)"
+    features = load_features(args.geojson, args.save_raw)
+    print(f"Loaded {len(features)} dengue clusters from {source}\n")
 
     rows = []
     covered = 0
@@ -431,6 +507,7 @@ def main() -> None:
                     "LOCALITY": locality,
                     "CASE_SIZE": properties.get("CASE_SIZE", ""),
                     **row,
+                    "POSTAL_PREFIX": postal_prefix(row["POSTAL"]),
                 }
             )
 
