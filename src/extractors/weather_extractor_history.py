@@ -1,9 +1,27 @@
-"""Extractor module for pulling historical rainfall data for the past N days using environment variables."""
+"""Extractor for pulling 60days historical rainfall data."""
 
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
+from pathlib import Path
+import json
 import requests
+
+# save to data/raw for future use
+
+
+def save_raw_historical_data(raw_records):
+    output_path = Path(__file__).parent.parent.parent / "data" / \
+        "raw" / "raw_historical_data.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(raw_records, f, indent=4, default=str)
+        print(f"OOO Successfully saved raw historical data to {output_path}")
+    except Exception as e:
+        print(f"XXX Error saving raw historical data: {e}")
+
 
 # Load environment variables from .env
 load_dotenv()
@@ -29,7 +47,6 @@ def fetch_historical_weather_data(days_back: int = 60):
     while current_date <= end_date:
         date_str = current_date.strftime("%Y-%m-%d")
 
-        # Append the date query parameter to the base URL from .env
         separator = "&" if "?" in WEATHER_API_URL else "?"
         url = f"{WEATHER_API_URL}{separator}date={date_str}"
 
@@ -76,16 +93,23 @@ def fetch_historical_weather_data(days_back: int = 60):
                         })
 
         except requests.exceptions.RequestException as e:
-            print(f"Warning: Failed to fetch data for {date_str}: {e}")
+            print(f"XXX  Warning: Failed to fetch data for {date_str}: {e}")
 
         current_date += timedelta(days=1)
 
     print(
-        f"Successfully fetched {len(historical_records)} station-level weather records.")
+        f"OOO Successfully fetched {len(historical_records)} station-level weather records.")
     return historical_records
 
 
 if __name__ == "__main__":
     print("Testing Historical Weather Extractor...")
     data = fetch_historical_weather_data(60)
+    if data:
+        print(
+            f"OOO Success! Fetched {len(data)} historical weather records for the past 60 days."
+        )
+        save_raw_historical_data(data)
+    else:
+        print("XXX Test failed: No historical data returned.")
     print(data[:3])

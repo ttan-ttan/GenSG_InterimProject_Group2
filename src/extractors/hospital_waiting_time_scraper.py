@@ -1,6 +1,8 @@
 """Extractor for live NUSH TTSH web scraping and mocking missing hospital"""
 
 from datetime import datetime
+import json
+from pathlib import Path
 import random
 import re
 
@@ -11,17 +13,36 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 
+# save the extracted data into data/raw for future use
+
+
+def save_raw_hospital_data(rraw_records):
+    output_dir = Path(__file__).resolve().parent.parent.parent / "data" / "raw"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / "hospital_wait_times.json"
+
+    try:
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(rraw_records, f, ensure_ascii=False,
+                      indent=4, default=str)
+        print(
+            f"OOO Successfully saved {len(rraw_records)} hospital records to {output_file}.")
+    except Exception as e:
+        print(f"XXX Error saving hospital data to JSON: {e}")
+
+# scrapper function for AH,NUH, NTFGH from NUH website
+# use css selector to search table.datatable, find column header hospital and patient
+
 
 def scrape_nuhs_wait_times():
-    """Scrapes Alexandra Hospital (AH), National University Hospital (NUH),
-    and Ng Teng Fong General Hospital (NTFGH) from the NUHS portal.
-    """
     url = "https://www.nuhs.edu.sg/patient-care/emergency-department-wait-times"
     hospitals_data = []
 
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")  # Run browser in background
+    # prevent linux server target closed error
     options.add_argument("--no-sandbox")
+    # prevent linix to use ram memory
     options.add_argument("--disable-dev-shm-usage")
 
     # pylint: disable=not-callable
@@ -86,9 +107,10 @@ def scrape_nuhs_wait_times():
 
     return hospitals_data
 
+# scrap TTSH data using primary card div and pull data using re.findall
+
 
 def scrape_ttsh_wait_time():
-    """Scrapes Tan Tock Seng Hospital (TTSH) live queue page using regex parsing."""
     url = "https://www.nhghealth.com.sg/ttsh/patients-visitors/emergency-medicine"
     ttsh_record = None
 
@@ -142,6 +164,8 @@ def scrape_ttsh_wait_time():
 
     return ttsh_record
 
+# mock missing hospital by stimulate 10am-8pm as peak(ran 20-55) others as low(10-25)
+
 
 def generate_mock_hospitals():
     """Generates realistic mock records for missing hospitals:
@@ -174,9 +198,10 @@ def generate_mock_hospitals():
 
     return mock_records
 
+# combining all the scrap and mock
+
 
 def fetch_all_hospital_data():
-    """Aggregates live-scraped data and fills missing units with mock datasets."""
     print("Fetching live NUHS data...")
     nuhs_data = scrape_nuhs_wait_times()
 
@@ -189,6 +214,9 @@ def fetch_all_hospital_data():
     combined_data = nuhs_data + mock_data
     if ttsh_data:
         combined_data.append(ttsh_data)
+
+    if combined_data:
+        save_raw_hospital_data(combined_data)
 
     return combined_data
 

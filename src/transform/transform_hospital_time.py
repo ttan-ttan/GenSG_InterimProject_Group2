@@ -3,19 +3,19 @@
 from datetime import datetime
 import re
 
+# Extracts integer count from patient waiting strings
+
 
 def parse_patient_count(val):
-    """Extracts integer count from patient waiting strings (e.g., '14 patient(s)' -> 14)."""
     if not val or val == "N/A":
         return None
     match = re.search(r'\d+', str(val))
     return int(match.group()) if match else None
 
+# Converts doctor wait time strings into 'X hr Y min'
+
 
 def parse_doctor_wait_time(val):
-    """Converts doctor wait time strings (hours or minutes) into total minutes,
-    decimal hours (for the database schema), and a clean readable format ('X hr Y min').
-    """
     if not val or val == "N/A":
         return None, None, "N/A"
 
@@ -43,13 +43,15 @@ def parse_doctor_wait_time(val):
 
     return total_minutes, wait_time_hrs, formatted_str
 
+# transform 1 record (TTSH)
+
 
 def transform_single_hospital_record(record):
-    """Cleans and transforms an individual raw hospital dictionary record."""
     if not record:
         return None
 
-    hospital_name = record.get("hospital_name")
+    rhospital_name = record.get("hospital_name")
+    hospital_name = rhospital_name.strip() if rhospital_name else None
     raw_patients = record.get("patients_waiting")
     raw_doctor_wait = record.get("doctor_wait_time")
     updated_at = record.get("updated_at", datetime.now())
@@ -68,17 +70,17 @@ def transform_single_hospital_record(record):
         "hospital_name": hospital_name,
         "patients_waiting_count": patients_count,
         "doctor_wait_minutes": total_mins,
-        "wait_time_hrs": wait_hrs,          # Matches database schema column
-        # Clean display format ('X hr Y min')
+        "wait_time_hrs": wait_hrs,
         "formatted_wait_time": formatted_wait,
         "updated_at": updated_at,
     }
 
     return transformed_record
 
+# transform list of record (NUSH & mock )
+
 
 def transform_hospital_data(raw_data_list):
-    """Iterates through a list of raw hospital records and transforms them."""
     if not raw_data_list:
         return []
 

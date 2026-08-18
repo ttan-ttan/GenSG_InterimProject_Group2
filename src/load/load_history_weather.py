@@ -1,4 +1,4 @@
-"""Loader module for inserting historical weather records into PostgreSQL."""
+"""Loader for inserting historical weather records into PostgreSQL."""
 
 from pathlib import Path
 import sys
@@ -42,7 +42,7 @@ def load_historical_weather_to_db(transformed_records, conn, table_name: str = "
             conn.commit()
         success_count = len(records_to_insert)
         print(
-            f"Successfully loaded {success_count} historical weather records into '{table_name}'.")
+            f"OOO Successfully loaded {success_count} historical weather records into '{table_name}'.")
     except psycopg2.Error as e:
         conn.rollback()
         # pylint: disable=broad-exception-caught

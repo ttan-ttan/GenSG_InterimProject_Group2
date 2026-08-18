@@ -1,4 +1,4 @@
-"""Transformer module for parsing 2-hour weather forecasts and determining rain status."""
+"""Transformer for 2-hour weather forecasts and check rain status."""
 
 from datetime import datetime
 
@@ -10,14 +10,23 @@ RAIN_CONDITIONS = [
     "Heavy Thundery Showers with Gusty Winds"
 ]
 
+# helper function to check if extracted string got rain condition keyword
 
-def parse_rain_forecast(forecast_string: str) -> bool:
-    """Returns True if the forecast condition indicates rain, otherwise False."""
+
+def check_rain_forecast(forecast_string: str) -> bool:
     return any(condition.lower() in forecast_string.lower() for condition in RAIN_CONDITIONS)
+
+# CREATE TABLE weather_forecast (
+#     id SERIAL PRIMARY KEY,
+#     area_name VARCHAR(100) NOT NULL UNIQUE,
+#     forecast_text VARCHAR(100) NOT NULL,
+#     will_rain BOOLEAN NOT NULL,
+#     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+# );
+# main transform to check data exist, putting it into schema corectly
 
 
 def transform_two_hour_forecast(raw_data):
-    """Parses raw 2-hour forecast JSON data into clean records for database insertion."""
     if not raw_data or "items" not in raw_data:
         print("XXX Warning: Raw forecast data is empty or invalid.")
         return []
@@ -36,7 +45,7 @@ def transform_two_hour_forecast(raw_data):
     for entry in forecasts:
         area = entry.get("area")
         forecast_text = entry.get("forecast")
-        will_rain = parse_rain_forecast(forecast_text)
+        will_rain = check_rain_forecast(forecast_text)
 
         transformed_records.append({
             "area_name": area,
@@ -46,5 +55,5 @@ def transform_two_hour_forecast(raw_data):
         })
 
     print(
-        f"Successfully transformed {len(transformed_records)} forecast records.")
+        f"OOO Successfully transformed {len(transformed_records)} forecast records.")
     return transformed_records

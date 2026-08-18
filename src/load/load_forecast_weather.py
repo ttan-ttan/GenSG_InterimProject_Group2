@@ -1,4 +1,4 @@
-"""Loader module for inserting 2-hour weather forecast records into PostgreSQL."""
+"""Loader for inserting 2-hour weather forecast records into PostgreSQL."""
 
 from datetime import datetime
 from pathlib import Path
