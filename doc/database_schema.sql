@@ -21,23 +21,28 @@ CREATE TABLE hospital_wait_times (
 
 CREATE TABLE weather_realtime (
     id SERIAL PRIMARY KEY,
-    area_name VARCHAR(100) NOT NULL UNIQUE,
+    area_name VARCHAR(100) NOT NULL,
+    postal_prefix VARCHAR(10),
     reading_value DECIMAL(5, 2) NOT NULL DEFAULT 0.0,
     is_heavy_rain BOOLEAN DEFAULT FALSE,
-    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_realtime_area_time UNIQUE (area_name, recorded_at)
 );
 
 CREATE TABLE weather_forecast (
     id SERIAL PRIMARY KEY,
-    area_name VARCHAR(100) NOT NULL UNIQUE,
+    area_name VARCHAR(100) NOT NULL,
+    postal_prefix VARCHAR(10),
     forecast_text VARCHAR(100) NOT NULL,
     will_rain BOOLEAN NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_forecast_area UNIQUE (area_name)
 );
 
 CREATE TABLE weather_history (
     id SERIAL PRIMARY KEY,
     area_name VARCHAR(100) NOT NULL,
+    postal_prefix VARCHAR(10),
     record_date DATE NOT NULL,
     total_rainfall_mm NUMERIC(5, 2) NOT NULL,
     is_catalyst_day BOOLEAN DEFAULT FALSE,

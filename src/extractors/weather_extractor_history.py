@@ -1,12 +1,10 @@
 """Extractor for pulling 60days historical rainfall data."""
-
-from datetime import datetime, timedelta
-import os
-from dotenv import load_dotenv
-from pathlib import Path
 import json
+import os
 import requests
-
+from datetime import datetime, timedelta
+from pathlib import Path
+from dotenv import load_dotenv
 # save to data/raw for future use
 
 

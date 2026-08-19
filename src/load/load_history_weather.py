@@ -2,7 +2,7 @@
 
 from pathlib import Path
 import sys
-
+import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
 
@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 
 def load_historical_weather_to_db(transformed_records, conn, table_name: str = "weather_history"):
-    """Inserts transformed historical weather records into the specified PostgreSQL table."""
     if not transformed_records:
         print("XXX Warning: No historical weather records provided for loading.")
         return 0
@@ -20,17 +19,18 @@ def load_historical_weather_to_db(transformed_records, conn, table_name: str = "
     for record in transformed_records:
         records_to_insert.append((
             record.get("area_name"),
+            record.get("postal_prefix"),
             record.get("record_date"),
             record.get("total_rainfall_mm"),
             record.get("is_catalyst_day", False),
         ))
 
-    # Using ON CONFLICT with composite key (area_name, record_date) to update if record already exists
     insert_query = f"""
-        INSERT INTO {table_name} (area_name, record_date, total_rainfall_mm, is_catalyst_day)
+        INSERT INTO {table_name} (area_name, postal_prefix, record_date, total_rainfall_mm, is_catalyst_day)
         VALUES %s
         ON CONFLICT (area_name, record_date) 
         DO UPDATE SET 
+            postal_prefix = EXCLUDED.postal_prefix,
             total_rainfall_mm = EXCLUDED.total_rainfall_mm,
             is_catalyst_day = EXCLUDED.is_catalyst_day;
     """
@@ -45,7 +45,6 @@ def load_historical_weather_to_db(transformed_records, conn, table_name: str = "
             f"OOO Successfully loaded {success_count} historical weather records into '{table_name}'.")
     except psycopg2.Error as e:
         conn.rollback()
-        # pylint: disable=broad-exception-caught
         print(f"XXX Error loading historical weather data into database: {e}")
 
     return success_count
@@ -76,7 +75,20 @@ if __name__ == "__main__":
 
         if cleaned_history:
             load_historical_weather_to_db(
-                cleaned_history, connection, table_name="weather_history")
+                cleaned_history, connection, table_name="weather_history"
+            )
+
+            df = pd.DataFrame(cleaned_history)
+            transformed_file = (
+                Path(__file__).resolve().parent.parent.parent
+                / "data"
+                / "processed"
+                / "weather_history.csv"
+            )
+            transformed_file.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(transformed_file, index=False)
+            print(
+                f"Successfully saved processed historical weather CSV to {transformed_file}")
         else:
             print("XXX Load test failed: Historical data is empty.")
 

@@ -2,7 +2,6 @@
 
 from datetime import datetime
 
-# Conditions that indicate rain or showers
 RAIN_CONDITIONS = [
     "Light Rain", "Moderate Rain", "Heavy Rain",
     "Passing Showers", "Light Showers", "Showers", "Heavy Showers",
@@ -10,20 +9,33 @@ RAIN_CONDITIONS = [
     "Heavy Thundery Showers with Gusty Winds"
 ]
 
-# helper function to check if extracted string got rain condition keyword
+
+def get_postal_prefix_from_area(area_name: str) -> str:
+    """Maps forecast area names to their corresponding Singapore postal prefix/district."""
+    if not area_name:
+        return "Unknown"
+
+    mapping = {
+        "Ang Mo Kio": "D20",
+        "Bishan": "D20",
+        "Clementi": "D05",
+        "West Coast": "D05",
+        "Bedok": "D16",
+        "Changi": "D17",
+        "Jurong": "D22",
+        "Yishun": "D27",
+        "Woodlands": "D25"
+    }
+
+    for key, prefix in mapping.items():
+        if key.lower() in area_name.lower():
+            return prefix
+
+    return "D01"
 
 
 def check_rain_forecast(forecast_string: str) -> bool:
     return any(condition.lower() in forecast_string.lower() for condition in RAIN_CONDITIONS)
-
-# CREATE TABLE weather_forecast (
-#     id SERIAL PRIMARY KEY,
-#     area_name VARCHAR(100) NOT NULL UNIQUE,
-#     forecast_text VARCHAR(100) NOT NULL,
-#     will_rain BOOLEAN NOT NULL,
-#     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-# );
-# main transform to check data exist, putting it into schema corectly
 
 
 def transform_two_hour_forecast(raw_data):
@@ -44,11 +56,13 @@ def transform_two_hour_forecast(raw_data):
 
     for entry in forecasts:
         area = entry.get("area")
+        postal_prefix = get_postal_prefix_from_area(area)
         forecast_text = entry.get("forecast")
         will_rain = check_rain_forecast(forecast_text)
 
         transformed_records.append({
             "area_name": area,
+            "postal_prefix": postal_prefix,
             "forecast_text": forecast_text,
             "will_rain": will_rain,
             "updated_at": update_timestamp

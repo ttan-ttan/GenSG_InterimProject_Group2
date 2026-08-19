@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 import sys
-
+import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
 
@@ -21,15 +21,20 @@ def load_weather_data_to_db(transformed_records, conn, table_name: str = "weathe
     for record in transformed_records:
         records_to_insert.append((
             record.get("area_name"),
+            record.get("postal_prefix"),
             record.get("reading_value", 0.0),
             record.get("is_heavy_rain", False),
             record.get("recorded_at", datetime.now()),
         ))
 
-    # Fixed columns: matched to actual database schema (removed forecast, added reading_value)
     insert_query = f"""
-        INSERT INTO {table_name} (area_name, reading_value, is_heavy_rain, recorded_at)
+        INSERT INTO {table_name} (area_name, postal_prefix, reading_value, is_heavy_rain, recorded_at)
         VALUES %s
+        ON CONFLICT (area_name, recorded_at) 
+        DO UPDATE SET 
+            postal_prefix = EXCLUDED.postal_prefix,
+            reading_value = EXCLUDED.reading_value,
+            is_heavy_rain = EXCLUDED.is_heavy_rain;
     """
 
     success_count = 0
@@ -73,7 +78,21 @@ if __name__ == "__main__":
 
         if cleaned_weather_data:
             load_weather_data_to_db(
-                cleaned_weather_data, connection, table_name="weather_realtime")
+                cleaned_weather_data, connection, table_name="weather_realtime"
+            )
+
+            # Export processed CSV for visualization
+            df = pd.DataFrame(cleaned_weather_data)
+            transformed_file = (
+                Path(__file__).resolve().parent.parent.parent
+                / "data"
+                / "processed"
+                / "weather_now.csv"
+            )
+            transformed_file.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(transformed_file, index=False)
+            print(
+                f"Successfully saved processed weather CSV to {transformed_file}")
         else:
             print("XXX Load test failed: Transformed weather data is empty.")
 

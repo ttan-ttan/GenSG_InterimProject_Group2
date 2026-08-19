@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 import sys
-
+import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
 
@@ -21,18 +21,18 @@ def load_forecast_to_db(transformed_records, conn, table_name: str = "weather_fo
     for record in transformed_records:
         records_to_insert.append((
             record.get("area_name"),
+            record.get("postal_prefix"),
             record.get("forecast_text"),
             record.get("will_rain", False),
             record.get("updated_at", datetime.now()),
         ))
 
-    # Using ON CONFLICT (area_name) assuming area_name has a UNIQUE constraint,
-    # or simple insert depending on your table design.
     insert_query = f"""
-        INSERT INTO {table_name} (area_name, forecast_text, will_rain, updated_at)
+        INSERT INTO {table_name} (area_name, postal_prefix, forecast_text, will_rain, updated_at)
         VALUES %s
         ON CONFLICT (area_name) 
         DO UPDATE SET 
+            postal_prefix = EXCLUDED.postal_prefix,
             forecast_text = EXCLUDED.forecast_text,
             will_rain = EXCLUDED.will_rain,
             updated_at = EXCLUDED.updated_at;
@@ -48,7 +48,6 @@ def load_forecast_to_db(transformed_records, conn, table_name: str = "weather_fo
             f"Successfully loaded {success_count} forecast records into '{table_name}'.")
     except psycopg2.Error as e:
         conn.rollback()
-        # pylint: disable=broad-exception-caught
         print(f"XXX Error loading forecast data into database: {e}")
 
     return success_count
@@ -78,8 +77,22 @@ if __name__ == "__main__":
         cleaned_forecast = transform_two_hour_forecast(raw_forecast)
 
         if cleaned_forecast:
-            load_forecast_to_db(cleaned_forecast, connection,
-                                table_name="weather_forecast")
+            load_forecast_to_db(
+                cleaned_forecast, connection, table_name="weather_forecast"
+            )
+
+            # Export processed CSV for visualization
+            df = pd.DataFrame(cleaned_forecast)
+            transformed_file = (
+                Path(__file__).resolve().parent.parent.parent
+                / "data"
+                / "processed"
+                / "weather_forecast_2hr.csv"
+            )
+            transformed_file.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(transformed_file, index=False)
+            print(
+                f"Successfully saved processed forecast CSV to {transformed_file}")
         else:
             print("XXX Load test failed: Forecast data is empty.")
 

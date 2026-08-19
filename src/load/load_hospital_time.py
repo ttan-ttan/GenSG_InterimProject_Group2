@@ -3,6 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 import sys
+import pandas as pd
 
 import psycopg2
 from psycopg2.extras import execute_values
@@ -77,6 +78,13 @@ if __name__ == "__main__":
         if cleaned_data:
             load_hospital_data_to_db(
                 cleaned_data, connection, table_name="hospital_wait_times")
+            df = pd.DataFrame(cleaned_data)
+            output_path = Path(__file__).resolve(
+            ).parent.parent.parent / "data" / "processed" / "hospital_wait_times.csv"
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(output_path, index=False)
+            print(
+                f"Successfully saved processed hospital CSV to {output_path}")
         else:
             print("XXX Load test failed: Transformed hospital data is empty.")
 

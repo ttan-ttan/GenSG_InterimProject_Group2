@@ -26,11 +26,12 @@ def save_raw_forecast_data(raw_records):
 load_dotenv()
 WEATHER_FORECAST_API_URL = os.getenv("WEATHER_FORECAST_API_URL")
 
-
 # main function fetch 2hr data
+
+
 def fetch_two_hour_forecast():
     """Fetches the latest 2-hour weather forecast from data.gov.sg."""
-    url = "WEATHER_FORECAST_API_URL"
+    url = WEATHER_FORECAST_API_URL
     print("Fetching 2-hour weather forecast data...")
 
     try:
