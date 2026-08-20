@@ -166,15 +166,16 @@ def evaluate_hospitals_for_patient(
         total_time_to_treatment = travel_result["final_estimated_time"] + \
             waiting_time_mins
 
-        # Hard filter: Travel time must be strictly <= 30 minutes
-        if travel_result["is_under_30_mins"]:
-            valid_recommendations.append({
-                "hospital_name": name,
-                "travel_time": travel_result["final_estimated_time"],
-                "waiting_time": waiting_time_mins,
-                "total_time": total_time_to_treatment,
-                "weather_impact": travel_result["factors"]
-            })
+        # AMENDED: Include all hospitals in ranking, but keep the flag
+        # to show if it's within the preferred 30-min travel window.
+        valid_recommendations.append({
+            "hospital_name": name,
+            "travel_time": travel_result["final_estimated_time"],
+            "waiting_time": waiting_time_mins,
+            "total_time": total_time_to_treatment,
+            "weather_impact": travel_result["factors"],
+            "is_under_30_mins": travel_result["is_under_30_mins"]
+        })
 
     # Sort recommendations by the fastest total time (Travel + Wait Time)
     valid_recommendations.sort(key=lambda x: x["total_time"])
