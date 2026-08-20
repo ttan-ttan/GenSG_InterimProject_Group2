@@ -90,7 +90,7 @@ def run_full_pipeline():
                         f"XXX Warning/Error in script: {script.name}. Continuing..."
                     )
             else:
-                print(f"--- Notice: Script not found, skipping: {script.name}")
+                print(f"XXX Notice: Script not found, skipping: {script.name}")
 
         # --- 2. LOAD STAGE ---
         print("\n-> Loading all domains into PostgreSQL database...")
@@ -115,7 +115,7 @@ def run_full_pipeline():
                     )
             else:
                 print(
-                    f"--- Notice: Loader script not found, skipping: {script.name}"
+                    f"XXX Notice: Loader script not found, skipping: {script.name}"
                 )
 
         # --- 3. VISUALIZATION STAGE ---
@@ -128,7 +128,7 @@ def run_full_pipeline():
                 print("XXX Error: Visualization script failed.")
                 return
         else:
-            print("--- Error: visualization.py not found.")
+            print("XXX Error: visualization.py not found.")
             return
 
         # --- 4. OPEN THE GENERATED DASHBOARD IMAGE ---
@@ -169,37 +169,9 @@ def handle_hospital_routing():
     if len(user_postal) != 6 or not user_postal.isdigit():
         print(
             "XXX Error: Invalid postal code format. "
-            "Please enter a 6-digit numeric postal code."
+            "Don't panic this is not TOTO."
         )
         return
-
-    hospitals_dataset = [
-        {
-            "name": "Singapore General Hospital (SGH)",
-            "base_travel_time_mins": 18.0,
-            "waiting_time_mins": 45,
-        },
-        {
-            "name": "Tan Tock Seng Hospital (TTSH)",
-            "base_travel_time_mins": 12.0,
-            "waiting_time_mins": 60,
-        },
-        {
-            "name": "Khoo Teck Puat Hospital (KTPH)",
-            "base_travel_time_mins": 25.0,
-            "waiting_time_mins": 30,
-        },
-        {
-            "name": "National University Hospital (NUH)",
-            "base_travel_time_mins": 28.0,
-            "waiting_time_mins": 50,
-        },
-        {
-            "name": "Changi General Hospital (CGH)",
-            "base_travel_time_mins": 32.0,
-            "waiting_time_mins": 25,
-        },
-    ]
 
     try:
         connection = psycopg2.connect(
@@ -210,10 +182,11 @@ def handle_hospital_routing():
             port=os.getenv("DB_PORT", "5432"),
         )
 
-        print(f"\nAnalyzing routes for Postal Prefix '{user_postal[:2]}'...")
+        print(
+            f"\nAnalyzing routes for Postal Prefix '{user_postal[:2]}' against current conditions...")
 
         evaluation_result = evaluate_hospitals_for_patient(
-            user_postal, hospitals_dataset, connection
+            user_postal, connection
         )
 
         connection.close()
@@ -246,7 +219,7 @@ def handle_hospital_routing():
                 )
             print("-" * 83)
 
-            print("\n All Valid Alternative Options (Sorted by Fastest Total Time):")
+            print("\n Alternative Options (Sorted by Fastest Total Time):")
             for idx, rec in enumerate(recommendations, 1):
                 print(f"{idx}. {rec['hospital_name']}")
                 print(
@@ -257,7 +230,7 @@ def handle_hospital_routing():
                     print(f"   - Factors: {', '.join(rec['weather_impact'])}")
                 print()
             print(
-                "=================== MAI TU LIAO KAH GIN GO HOSPITAL!!==============================="
+                "=================== MAI TU LIAO KAH GIN GO HOSPITAL!!========================="
             )
 
     except psycopg2.Error as db_err:
@@ -267,10 +240,18 @@ def handle_hospital_routing():
 def main():
     """Main menu interface control loop."""
     while True:
-        print("\n=================== GenSG Project Main Menu ===================")
+        print(r"""
+ ________                                         ___
+|        |___                    TOTAL           |   |
+| Ambulance |\_                  TIME        ____|   |____
+|   [+]     |  \                  TO        |    [+]      |
+|___________|   \             TREATMENT     |  Hospital   |
+|  @     @  |____\             PROGRAM      |  [+]   [+]  |
+===================== GenSG Project Main Menu ======================
+""")
         print("[1] Run Full ETL Pipeline, Update Visualizations & View Dashboard")
         print("[2] Search Emergency Hospital Routing Recommendation")
-        print("[3] Reset/Recreate Database Schema (⚠️ Wipes all data)")
+        print("[3] Reset/Recreate Database Schema")
         print("[0] Exit")
 
         choice = input("Select an option (0-3): ").strip()
@@ -290,3 +271,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+# python -m src.main

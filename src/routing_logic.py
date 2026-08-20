@@ -110,18 +110,17 @@ def calculate_adjusted_travel_time(
 
 def evaluate_hospitals_for_patient(
     postal_code: str,
-    hospitals_list: list,
     conn
 ) -> dict:
-    """Evaluates all hospitals against a user's postal code, queries forecasted weather, 
-    filters out choices exceeding 30 minutes, and ranks them by total time-to-treatment 
-    (Travel Time + A&E Waiting Time) to propose the absolute best option.
+    """Queries live hospital wait times from the database, evaluates them against 
+    the patient's postal code region, factors in weather and traffic, filters out 
+    choices exceeding 30 minutes, and ranks them by total time-to-treatment.
     """
     patient_region = get_region_from_postal(postal_code)
     valid_recommendations = []
 
-    # Query the weather forecast table for the patient's region
     with conn.cursor() as cursor:
+        # 1. Query the latest weather forecast for the patient's mapped region
         cursor.execute(
             "SELECT will_rain FROM weather_forecast WHERE area_name ILIKE %s",
             (f"%{patient_region}%",)
@@ -129,22 +128,50 @@ def evaluate_hospitals_for_patient(
         row = cursor.fetchone()
         will_rain = row[0] if row else False
 
-    for hospital in hospitals_list:
-        name = hospital.get("name")
-        base_time = hospital.get("base_travel_time_mins")
-        wait_time = hospital.get("waiting_time_mins", 0)
+        # 2. Query the latest snapshot of all monitored hospitals from database scrapers/mock data
+        cursor.execute("""
+            SELECT DISTINCT ON (hospital_name)
+                hospital_name,
+                wait_time_hrs,
+                patients_waiting_count,
+                doctor_wait_minutes
+            FROM hospital_wait_times
+            ORDER BY hospital_name, updated_at DESC;
+        """)
+        db_hospitals = cursor.fetchall()
+
+    # Fallback default base travel times (in minutes) for standard Singapore hospitals
+    # if dynamic mapping isn't fully configured per postal district yet
+    default_base_travel_times = {
+        "Singapore General Hospital (SGH)": 18.0,
+        "Tan Tock Seng Hospital (TTSH)": 12.0,
+        "Khoo Teck Puat Hospital (KTPH)": 25.0,
+        "National University Hospital (NUH)": 28.0,
+        "Changi General Hospital (CGH)": 32.0,
+        "Ng Teng Fong General Hospital (NTFGH)": 26.0,
+        "Sengkang General Hospital (SKH)": 24.0,
+        "Alexandra Hospital": 15.0
+    }
+
+    for hosp_row in db_hospitals:
+        name = hosp_row[0]
+        wait_time_hrs = float(hosp_row[1]) if hosp_row[1] is not None else 1.0
+
+        waiting_time_mins = int(wait_time_hrs * 60)
+        base_time = default_base_travel_times.get(name, 20.0)
 
         # Compute travel time with modifiers (Weather + Traffic + Buffer)
         travel_result = calculate_adjusted_travel_time(base_time, will_rain)
 
-        total_time_to_treatment = travel_result["final_estimated_time"] + wait_time
+        total_time_to_treatment = travel_result["final_estimated_time"] + \
+            waiting_time_mins
 
         # Hard filter: Travel time must be strictly <= 30 minutes
         if travel_result["is_under_30_mins"]:
             valid_recommendations.append({
                 "hospital_name": name,
                 "travel_time": travel_result["final_estimated_time"],
-                "waiting_time": wait_time,
+                "waiting_time": waiting_time_mins,
                 "total_time": total_time_to_treatment,
                 "weather_impact": travel_result["factors"]
             })
@@ -154,9 +181,13 @@ def evaluate_hospitals_for_patient(
 
     best_choice = valid_recommendations[0] if valid_recommendations else None
 
+    # Restrict alternatives to only the next top 2 fastest choices
+    alternatives = valid_recommendations[1:3] if len(
+        valid_recommendations) > 1 else []
+
     return {
         "patient_region": patient_region,
         "will_rain": will_rain,
-        "recommendations": valid_recommendations,
+        "recommendations": alternatives,
         "best_choice": best_choice
     }
